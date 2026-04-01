@@ -20,19 +20,6 @@ import { createGroq } from '@ai-sdk/groq'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
-// Polyfill browser globals that pdfjs-dist expects but Node.js doesn't have
-// ---------------------------------------------------------------------------
-if (typeof (global as any).DOMMatrix === 'undefined') {
-  (global as any).DOMMatrix = class DOMMatrix {}
-}
-if (typeof (global as any).Path2D === 'undefined') {
-  (global as any).Path2D = class Path2D {}
-}
-if (typeof (global as any).ImageData === 'undefined') {
-  (global as any).ImageData = class ImageData {}
-}
-
-// ---------------------------------------------------------------------------
 // Zod schema — the LLM must return exactly this shape
 // ---------------------------------------------------------------------------
 const InvoiceSchema = z.object({
@@ -50,33 +37,15 @@ export type ExtractedInvoice = z.infer<typeof InvoiceSchema>
 // ---------------------------------------------------------------------------
 // Step 1a — PDF text extraction via pdfjs-dist (lazy import)
 // Importing inside the function prevents Turbopack from statically bundling
-// pdfjs-dist and causing "Class constructors cannot be invoked without 'new'".
+// pdfjs-dist replaced by unpdf — no worker or DOM polyfills needed
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  // Import the PDF library + worker as side-effects.
-  // The worker module registers itself when imported — no workerSrc path needed.
-  // This is the correct pattern for Node.js / Vercel serverless.
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  await import('pdfjs-dist/legacy/build/pdf.worker.mjs' as any)
-
-  const pdfData = new Uint8Array(buffer)
-  const loadingTask = pdfjsLib.getDocument({
-    data: pdfData,
-    disableFontFace: true,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  })
-  const pdfDocument = await loadingTask.promise
-
-  let rawText = ''
-  for (let i = 1; i <= pdfDocument.numPages; i++) {
-    const page = await pdfDocument.getPage(i)
-    const textContent = await page.getTextContent()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawText += textContent.items.map((item: any) => item.str as string).join(' ') + '\n'
-  }
-  return rawText
+  // unpdf is built specifically for server/edge environments.
+  // It bundles its own PDF.js internals — no worker, no DOM globals needed.
+  const { extractText } = await import('unpdf')
+  const { text } = await extractText(new Uint8Array(buffer))
+  return text.join('\n')
 }
 
 // ---------------------------------------------------------------------------
