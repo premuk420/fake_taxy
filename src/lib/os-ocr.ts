@@ -53,13 +53,11 @@ export type ExtractedInvoice = z.infer<typeof InvoiceSchema>
 // pdfjs-dist and causing "Class constructors cannot be invoked without 'new'".
 // ---------------------------------------------------------------------------
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  // Dynamic import — Turbopack defers this to Node.js runtime
+  // Import the PDF library + worker as side-effects.
+  // The worker module registers itself when imported — no workerSrc path needed.
+  // This is the correct pattern for Node.js / Vercel serverless.
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-
-  // Setting workerSrc to '' activates pdfjs-dist's built-in "fake worker"
-  // which runs synchronously in the same thread — no external worker file needed.
-  // This is the correct approach for Vercel serverless / Node.js environments.
-  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+  await import('pdfjs-dist/legacy/build/pdf.worker.mjs' as any)
 
   const pdfData = new Uint8Array(buffer)
   const loadingTask = pdfjsLib.getDocument({
