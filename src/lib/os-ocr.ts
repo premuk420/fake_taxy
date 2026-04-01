@@ -20,6 +20,19 @@ import { createGroq } from '@ai-sdk/groq'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
+// Polyfill browser globals that pdfjs-dist expects but Node.js doesn't have
+// ---------------------------------------------------------------------------
+if (typeof (global as any).DOMMatrix === 'undefined') {
+  (global as any).DOMMatrix = class DOMMatrix {}
+}
+if (typeof (global as any).Path2D === 'undefined') {
+  (global as any).Path2D = class Path2D {}
+}
+if (typeof (global as any).ImageData === 'undefined') {
+  (global as any).ImageData = class ImageData {}
+}
+
+// ---------------------------------------------------------------------------
 // Zod schema — the LLM must return exactly this shape
 // ---------------------------------------------------------------------------
 const InvoiceSchema = z.object({
