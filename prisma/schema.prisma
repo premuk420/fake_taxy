@@ -1,0 +1,72 @@
+// schema.prisma
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Firm {
+  id          String   @id @default(cuid())
+  name        String
+  stripeSubId String?  // Stripe Subscription ID
+  users       User[]
+  clients     ClientCompany[]
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  password        String?  // Handled mostly by Supabase Auth, storing references here
+  role            String   // SQLite doesn't support enums natively easily via prompt, so defaulting to String 'ACCOUNTANT', 'CLIENT'
+  firmId          String?
+  firm            Firm?    @relation(fields: [firmId], references: [id])
+  clientCompanyId String?
+  clientCompany   ClientCompany? @relation(fields: [clientCompanyId], references: [id])
+  tasks           Task[]   @relation("UserTasks")
+}
+
+model ClientCompany {
+  id        String   @id @default(cuid())
+  name      String
+  ico       String?  // Registration number
+  dic       String?  // VAT number
+  firmId    String
+  firm      Firm     @relation(fields: [firmId], references: [id])
+  users     User[]
+  invoices  Invoice[]
+  tasks     Task[]
+}
+
+model Invoice {
+  id              String       @id @default(cuid())
+  clientCompanyId String
+  clientCompany   ClientCompany @relation(fields: [clientCompanyId], references: [id])
+  fileUrl         String       // Supabase Storage Link
+  type            String       // 'ISSUED', 'RECEIVED'
+  status          String       // 'PENDING', 'EXTRACTED', 'APPROVED', 'EXPORTED'
+  
+  // Fast Query Scalar Metrics
+  issueDate       DateTime?
+  dueDate         DateTime?
+  totalAmount     Float?
+  currency        String?
+
+  extractedData   String?      // stringified JSON payload fallback since SQLite lacks native JSON maps
+  isdocXml        String?      // Generated ISDOC payload
+  createdAt       DateTime     @default(now())
+}
+
+model Task {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  deadline        DateTime?
+  status          String     // 'TODO', 'IN_PROGRESS', 'DONE'
+  assigneeId      String?
+  assignee        User?    @relation("UserTasks", fields: [assigneeId], references: [id])
+  clientCompanyId String?
+  clientCompany   ClientCompany? @relation(fields: [clientCompanyId], references: [id])
+}
