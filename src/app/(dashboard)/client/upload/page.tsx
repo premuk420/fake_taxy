@@ -1,154 +1,136 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { UploadCloud, File as FileIcon, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Upload, FileText, CheckCircle2, XCircle, Loader2, Trash2, CloudUpload } from 'lucide-react'
 
-// Simple interface for frontend
 interface UploadItem {
   id: string
-  name: string
-  status: 'processing' | 'done' | 'error'
-  resultStr?: string
+  file: File
+  status: 'pending' | 'uploading' | 'success' | 'error'
+  result?: any
+  error?: string
 }
 
-export default function UploadPage() {
+export default function ClientUploadPage() {
   const [queue, setQueue] = useState<UploadItem[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleUploadClick = () => {
-    fileInputRef.current?.click()
+  const addFiles = (files: FileList | File[]) => {
+    const items: UploadItem[] = Array.from(files)
+      .filter(f => f.type === 'application/pdf' || f.type.startsWith('image/'))
+      .map(f => ({ id: Math.random().toString(36).slice(2), file: f, status: 'pending' }))
+    setQueue(q => [...q, ...items])
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
+  const processFile = async (item: UploadItem) => {
+    setQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'uploading' } : i))
 
-    Array.from(files).forEach(async (file) => {
-      const itemId = Math.random().toString(36).substring(7)
-      
-      // Add to queue visualization
-      setQueue(prev => [{ id: itemId, name: file.name, status: 'processing' }, ...prev])
+    const fd = new FormData()
+    fd.append('file', item.file)
 
-      // Push payload to OCR engine
-      const formData = new FormData()
-      formData.append('file', file)
+    try {
+      const ocrRes = await fetch('/api/ocr', { method: 'POST', body: fd })
+      const ocr = await ocrRes.json()
 
-      try {
-        const res = await fetch('/api/ocr', { method: 'POST', body: formData })
-        const json = await res.json()
-        
-        if (res.ok && json.success) {
-          setQueue(prev => prev.map(item => item.id === itemId ? {
-            ...item,
-            status: 'done',
-            // Display extracted amount or simple success if amounts failed to match heuristic
-            resultStr: json.data?.totalAmount ? `${json.data.totalAmount} ${json.data.currency}` : 'Extracted ✓'
-          } : item))
-        } else {
-          setQueue(prev => prev.map(item => item.id === itemId ? {
-            ...item,
-            status: 'error',
-            resultStr: json.error || 'Extraction Failed'
-          } : item))
-        }
-      } catch(err) {
-         setQueue(prev => prev.map(item => item.id === itemId ? { ...item, status: 'error', resultStr: 'Network Error' } : item))
-      }
-    })
-    
-    // reset input
-    if (fileInputRef.current) fileInputRef.current.value = ''
+      if (!ocrRes.ok || !ocr.success) throw new Error(ocr.error ?? 'OCR selhalo')
+
+      // Save invoice to DB
+      await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileUrl: item.file.name, type: 'RECEIVED', extractedData: ocr.data }),
+      })
+
+      setQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'success', result: ocr.data } : i))
+    } catch (err: any) {
+      setQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'error', error: err.message } : i))
+    }
   }
 
-  const clearItem = (id: string) => {
-    setQueue(prev => prev.filter(i => i.id !== id))
-  }
+  const uploadAll = () => queue.filter(i => i.status === 'pending').forEach(processFile)
+  const remove = (id: string) => setQueue(q => q.filter(i => i.id !== id))
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16">
+    <div className="max-w-3xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Upload Documents</h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">Upload your received and issued invoices. Our system will extract key information and send it to your accountant.</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Nahrát dokumenty</h1>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">Nahrajte faktury — AI automaticky vytěží data a předá účetnímu ke schválení.</p>
       </div>
 
-      <div onClick={handleUploadClick} className="w-full max-w-3xl aspect-[21/9] border-2 border-dashed border-blue-300 dark:border-blue-500/30 rounded-3xl bg-blue-50/50 dark:bg-blue-500/5 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors relative group overflow-hidden">
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={handleFileChange}
-          multiple
-          accept="application/pdf,image/jpeg,image/png"
-          className="hidden" 
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/0 to-blue-500/5 group-hover:to-blue-500/10 transition-all"></div>
-        <div className="w-20 h-20 bg-white dark:bg-slate-900 shadow-xl shadow-blue-200 dark:shadow-blue-900/50 rounded-full flex items-center justify-center mb-6 relative z-10 group-hover:-translate-y-2 transition-transform duration-500">
-          <UploadCloud className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-        </div>
-        <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Drag & Drop files here</h3>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Support for PDF, JPG, PNG up to 10MB.</p>
-        <button className="bg-blue-600 text-white font-semibold py-3 px-8 rounded-full shadow-lg shadow-blue-500/20 hover:scale-105 transition-transform hover:bg-blue-700">
-          Browse Files
-        </button>
+      {/* Dropzone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files) }}
+        onClick={() => inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-3xl p-12 text-center cursor-pointer transition-all ${dragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}
+      >
+        <input ref={inputRef} type="file" multiple accept=".pdf,image/*" className="hidden" onChange={e => e.target.files && addFiles(e.target.files)} />
+        <CloudUpload className={`w-12 h-12 mx-auto mb-4 ${dragging ? 'text-indigo-500' : 'text-slate-400'}`} />
+        <p className="font-semibold text-slate-700 dark:text-slate-300 text-lg">Přetáhněte soubory sem</p>
+        <p className="text-slate-400 mt-1 text-sm">nebo klikněte pro výběr · PDF, JPG, PNG · max 10 MB</p>
       </div>
 
-      <div className="max-w-3xl">
-        <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-slate-50 flex items-center gap-2">
-            Processing Queue <span className="bg-slate-200 dark:bg-slate-800 text-slate-600 rounded-full px-2 text-xs">{queue.length}</span>
-        </h3>
-        
-        {queue.length === 0 && (
-          <p className="text-sm border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-slate-400 rounded-xl">Nothing uploaded yet.</p>
-        )}
-
+      {/* Queue */}
+      {queue.length > 0 && (
         <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="font-semibold text-slate-900 dark:text-slate-50">{queue.length} soubor{queue.length > 1 ? 'y' : ''}</h2>
+            {queue.some(i => i.status === 'pending') && (
+              <button onClick={uploadAll} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-2 transition shadow-md shadow-indigo-500/20">
+                <Upload className="w-4 h-4" /> Zpracovat vše
+              </button>
+            )}
+          </div>
+
           {queue.map(item => (
-            <div key={item.id} className={`bg-white dark:bg-slate-900 border rounded-xl p-4 flex items-center justify-between shadow-sm relative overflow-hidden transition-all ${
-                item.status === 'done' ? 'border-emerald-200 dark:border-emerald-500/20' : 
-                item.status === 'error' ? 'border-red-200 dark:border-red-500/20' : 
-                'border-slate-200/50 dark:border-slate-800/50'
-            }`}>
-              
-              {item.status === 'done' && <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-emerald-500"></div>}
-              {item.status === 'error' && <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-red-500"></div>}
-
-              <div className="flex items-center gap-4 pl-2 w-full">
-                {/* Icon wrapper */}
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
-                    item.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                    item.status === 'error' ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' :
-                    'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                }`}>
-                  {item.status === 'done' ? <CheckCircle className="w-6 h-6"/> : item.status === 'error' ? <AlertCircle className="w-6 h-6"/> : <FileIcon className="w-6 h-6"/>}
+            <div key={item.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-slate-100 text-sm">{item.file.name}</p>
+                    <p className="text-xs text-slate-400">{(item.file.size / 1024).toFixed(0)} KB</p>
+                  </div>
                 </div>
-                
-                <div className="flex flex-col flex-1 truncate">
-                   <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.name}</span>
-                   
-                   {item.status === 'processing' && (
-                     <div className="flex items-center mt-1 w-full max-w-xs">
-                       <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mr-3 relative">
-                         <div className="bg-blue-500 w-[60%] h-full rounded-full animate-[pulse_1.5s_infinite] absolute left-0 ease-in-out duration-700"></div>
-                       </div>
-                       <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 animate-pulse whitespace-nowrap">Extracting OS-OCR...</span>
-                     </div>
-                   )}
-
-                   {item.status === 'done' && (
-                     <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-500 mt-1 tracking-wide">{item.resultStr || 'Processed successfully'}</span>
-                   )}
-
-                   {item.status === 'error' && (
-                     <span className="text-xs font-semibold text-red-600 dark:text-red-500 mt-1 tracking-wide">{item.resultStr}</span>
-                   )}
+                <div className="flex items-center gap-3">
+                  {item.status === 'pending' && (
+                    <button onClick={() => processFile(item)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 px-3 py-1.5 rounded-lg transition">
+                      Zpracovat
+                    </button>
+                  )}
+                  {item.status === 'uploading' && <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />}
+                  {item.status === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                  {item.status === 'error' && <XCircle className="w-5 h-5 text-red-500" />}
+                  <button onClick={() => remove(item.id)} className="text-slate-400 hover:text-red-500 transition">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <button onClick={() => clearItem(item.id)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-2 shrink-0">
-                <X className="w-5 h-5"/>
-              </button>
+
+              {item.status === 'uploading' && (
+                <div className="mt-3 text-xs text-indigo-500 flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Extrahuji data pomocí AI...
+                </div>
+              )}
+              {item.status === 'success' && item.result && (
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {Object.entries(item.result).filter(([, v]) => v).map(([k, v]) => (
+                    <div key={k} className="bg-emerald-50 dark:bg-emerald-500/10 rounded-lg px-3 py-2">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium capitalize">{k.replace(/([A-Z])/g, ' $1').trim()}</p>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">{String(v)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {item.status === 'error' && (
+                <p className="mt-2 text-xs text-red-500 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2">{item.error}</p>
+              )}
             </div>
           ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }

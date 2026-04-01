@@ -1,98 +1,118 @@
 'use client'
 
-import { Search, Plus, MoreHorizontal, FileText, CheckCircle2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Users, Plus, Building2, FileText, CheckSquare, Search, X } from 'lucide-react'
 
-// Dummy data
-const clients = [
-  { id: 1, name: 'Tech Solutions s.r.o.', ico: '12345678', dic: 'CZ12345678', status: 'Active', mrr: '$1,200', missingDocs: 0 },
-  { id: 2, name: 'Alpha Retail Ltd', ico: '87654321', dic: 'CZ87654321', status: 'Active', mrr: '$850', missingDocs: 12 },
-  { id: 3, name: 'Global Logistics a.s.', ico: '11223344', dic: 'CZ11223344', status: 'Onboarding', mrr: '$2,400', missingDocs: 5 }
-]
+interface Client { id: string; name: string; ico?: string | null; dic?: string | null; _count: { invoices: number; tasks: number } }
 
 export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', ico: '', dic: '' })
+  const [saving, setSaving] = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    fetch('/api/clients').then(r => r.json()).then(d => { setClients(Array.isArray(d) ? d : []); setLoading(false) })
+  }
+
+  useEffect(load, [])
+
+  const addClient = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    await fetch('/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    setShowForm(false)
+    setForm({ name: '', ico: '', dic: '' })
+    load()
+    setSaving(false)
+  }
+
+  const filtered = clients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.ico?.includes(search))
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Client Directory</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage all your firm's clients and their tax settings</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Klienti</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{clients.length} klientů celkem</p>
         </div>
-        <button onClick={() => alert('Checking adding client...')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-lg shadow-indigo-500/20 transition-all">
-          <Plus className="w-5 h-5 mr-2" /> Add Client
+        <button onClick={() => setShowForm(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-lg shadow-indigo-500/20">
+          <Plus className="w-4 h-4" /> Přidat klienta
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search clients by name or IČO..." 
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-900 dark:text-slate-50 placeholder:text-slate-400"
-            />
-          </div>
-          <div className="hidden sm:flex items-center gap-3">
-             <button className="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 py-2 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Filter</button>
-             <button className="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 py-2 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Export</button>
+      {/* Add client modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Nový klient</h2>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={addClient} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Název firmy *</label>
+                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Tech Solutions s.r.o." className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">IČO</label>
+                <input value={form.ico} onChange={e => setForm(f => ({ ...f, ico: e.target.value }))} placeholder="12345678" className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">DIČ</label>
+                <input value={form.dic} onChange={e => setForm(f => ({ ...f, dic: e.target.value }))} placeholder="CZ12345678" className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition">Zrušit</button>
+                <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-60">
+                  {saving ? 'Ukládám...' : 'Přidat'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-200 dark:border-slate-800">
-              <tr>
-                <th className="px-6 py-4">Company Name</th>
-                <th className="px-6 py-4">IČO / DIČ</th>
-                <th className="px-6 py-4">Monthly Value</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {clients.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-slate-900 dark:text-slate-50 text-base">{c.name}</div>
-                    {c.missingDocs > 0 ? (
-                      <div className="text-xs font-medium text-amber-600 dark:text-amber-500 mt-1 flex items-center leading-tight">
-                        <FileText className="w-3.5 h-3.5 mr-1" /> {c.missingDocs} missing docs
-                      </div>
-                    ) : (
-                      <div className="text-xs font-medium text-emerald-600 dark:text-emerald-500 mt-1 flex items-center leading-tight">
-                         <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> All documents clear
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono text-xs space-y-1">
-                    <div>{c.ico}</div>
-                    <div className="text-slate-400 dark:text-slate-500">{c.dic}</div>
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300">
-                    {c.mrr}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] uppercase tracking-wider font-bold border ${
-                      c.status === 'Active' 
-                        ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
-                        : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20'
-                    }`}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                      <MoreHorizontal className="w-5 h-5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Hledat klienta nebo IČO..." className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white" />
       </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="space-y-3">{Array(4).fill(0).map((_, i) => <div key={i} className="h-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 animate-pulse" />)}</div>
+      ) : !filtered.length ? (
+        <div className="text-center py-20 text-slate-400">
+          <Users className="w-16 h-16 mx-auto mb-4 opacity-20" />
+          <p className="font-medium text-lg">{search ? 'Žádný výsledek' : 'Zatím žádní klienti'}</p>
+          {!search && <p className="mt-2 text-sm">Přidejte prvního klienta tlačítkem výše</p>}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(c => (
+            <div key={c.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex items-center justify-between hover:shadow-md transition group">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-lg">
+                  {c.name[0]}
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-slate-50">{c.name}</p>
+                  <p className="text-sm text-slate-500">{c.ico ? `IČO: ${c.ico}` : ''}{c.dic ? ` · DIČ: ${c.dic}` : ''}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 text-sm text-slate-500">
+                <div className="flex items-center gap-1.5"><FileText className="w-4 h-4" /> {c._count.invoices}</div>
+                <div className="flex items-center gap-1.5"><CheckSquare className="w-4 h-4" /> {c._count.tasks}</div>
+                <Building2 className="w-4 h-4 opacity-0 group-hover:opacity-100 text-indigo-500 transition" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
