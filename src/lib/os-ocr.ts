@@ -56,8 +56,10 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   // Dynamic import — Turbopack defers this to Node.js runtime
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-  // Crucial: set workerSrc so pdfjs-dist uses its bundled fake worker in Node.js
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.mjs'
+  // Setting workerSrc to '' activates pdfjs-dist's built-in "fake worker"
+  // which runs synchronously in the same thread — no external worker file needed.
+  // This is the correct approach for Vercel serverless / Node.js environments.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 
   const pdfData = new Uint8Array(buffer)
   const loadingTask = pdfjsLib.getDocument({
@@ -65,6 +67,7 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
     disableFontFace: true,
     useWorkerFetch: false,
     isEvalSupported: false,
+    useSystemFonts: true,
   })
   const pdfDocument = await loadingTask.promise
 
