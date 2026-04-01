@@ -32,7 +32,6 @@ export async function middleware(request: NextRequest) {
 
   // Redirect logged-in users away from login/register
   if ((pathname === '/login' || pathname === '/register') && user) {
-    // Check role from user metadata to redirect correctly
     const role = user.user_metadata?.role
     if (role === 'ACCOUNTANT') return NextResponse.redirect(new URL('/accountant', request.url))
     return NextResponse.redirect(new URL('/client', request.url))
