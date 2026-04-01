@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
+
+export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   try {
@@ -8,6 +10,8 @@ export async function POST(req: Request) {
     if (!firmId) {
       return NextResponse.json({ error: 'Firm ID is required' }, { status: 400 })
     }
+
+    const stripe = getStripe()
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -22,9 +26,7 @@ export async function POST(req: Request) {
       success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/accountant/billing?success=true`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/accountant/billing?canceled=true`,
       client_reference_id: firmId,
-      metadata: {
-        firmId,
-      },
+      metadata: { firmId },
     })
 
     return NextResponse.json({ url: session.url })

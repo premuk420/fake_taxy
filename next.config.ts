@@ -3,10 +3,9 @@ const nextConfig: any = {
   // CommonJS-only packages — Turbopack must not bundle them
   serverExternalPackages: ["tesseract.js", "pdfjs-dist"],
 
-  // MVP: skip type & lint checks during Vercel build to ship faster.
+  // MVP: skip TypeScript type checking during Vercel build to ship faster.
   // !! Remove before production launch !!
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 };
 
 export default nextConfig;
